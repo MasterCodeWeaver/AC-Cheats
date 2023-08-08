@@ -98,14 +98,6 @@ int main(int argc, char* argv[])
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 		SDL_RenderClear(renderer);
 
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_QUIT:
-				quit = true;
-				break;
-			}
-		}
-
 		ReadProcessMemory(pHandle, (LPCVOID*)(healthPtrAddr), &player.health, sizeof(int), 0);
 		ReadProcessMemory(pHandle, (LPCVOID*)(positionPtrAddr), &player.position, sizeof(Vector3), 0);
 		ReadProcessMemory(pHandle, (LPCVOID*)(viewDirectionAddr), &player.viewDirection, sizeof(Vector2), 0);
@@ -120,7 +112,6 @@ int main(int argc, char* argv[])
 		player.health = 69420;
 
 		WriteProcessMemory(pHandle, (LPVOID)healthPtrAddr, &player.health, sizeof(int), nullptr);
-		//WriteProcessMemory(pHandle, (LPVOID)namePtrAddr, &player.name, sizeof(char) * 11, nullptr);
 
 		SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
 		DrawCircle(renderer, (int)player.position.x, (int)player.position.y, 5);
@@ -128,17 +119,61 @@ int main(int argc, char* argv[])
 			(int)(player.position.x + cos((player.viewDirection.x - 90) * (M_PI / 180)) * 10), 
 			(int)(player.position.y + sin((player.viewDirection.x - 90) * (M_PI / 180)) * 10));
 
-		for (DWORD entityOffset = 0x4; entityOffset < 0x0 + (0x4 * 12); entityOffset += 0x4)
+
+		double closestDistance = INFINITY;
+		Vector3 closestEntity;
+		for (DWORD entityOffset = 0x4; entityOffset <= (0x0 + (0x4 * 8)); entityOffset += 0x4)
 		{
 			DWORD entityPtrAddr = GetPointerAddress(hwnd, gameBaseAddress, entityListBaseAddr, { entityOffset, 0x4 });
 			ReadProcessMemory(pHandle, (LPCVOID*)(entityPtrAddr), &entityPosition, sizeof(Vector3), 0);
 
 			SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 			DrawCircle(renderer, entityPosition.x, entityPosition.y, 5);
+
+			if ((player.position - entityPosition).Magnitude() < closestDistance) {
+				closestDistance = (player.position - entityPosition).Magnitude();
+				closestEntity = Vector3(entityPosition.x, entityPosition.y, entityPosition.z);
+				std::cout << closestDistance << std::endl;
+			}
 		}
 
+		while (SDL_PollEvent(&event)) {
+			switch (event.type) {
+			case SDL_QUIT:
+				quit = true;
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				Vector3 delta = (entityPosition - player.position);
+				float yaw = atan2f(delta.y, delta.x) * (180 / M_PI);
+
+				float hyp = sqrt(delta.x * delta.x + delta.y * delta.y);
+				float pitch = atan2f(delta.z, hyp) * (180 / M_PI);
+
+				player.viewDirection.x = yaw + 90;
+				player.viewDirection.y = pitch;
+
+				WriteProcessMemory(pHandle, (LPVOID)(viewDirectionAddr), &player.viewDirection, sizeof(Vector2), 0);
+
+			}
+		}
+
+		Vector3 delta = (entityPosition - player.position);
+		float yaw = atan2f(delta.y, delta.x) * (180 / M_PI);
+
+		float hyp = sqrt(delta.x * delta.x + delta.y * delta.y);
+		float pitch = atan2f(delta.z, hyp) * (180 / M_PI);
+
+		player.viewDirection.x = yaw + 90;
+		player.viewDirection.y = pitch;
+
+		WriteProcessMemory(pHandle, (LPVOID)(viewDirectionAddr), &player.viewDirection, sizeof(Vector2), 0);
+		
+		//std::cout << (atan2(player.position.y, player.position.x) - atan2(closestEntity.y, closestEntity.x)) * (180 / M_PI) << std::endl;
+
+		//WriteProcessMemory(pHandle, (LPVOID*)(viewDirectionAddr), &rotationAngle, sizeof(float), 0);
+
 		SDL_RenderPresent(renderer);
-		SDL_Delay(10);
+		//SDL_Delay(10);
 	}
 
 	return 0;
